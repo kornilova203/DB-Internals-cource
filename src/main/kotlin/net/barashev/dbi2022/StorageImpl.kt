@@ -16,7 +16,6 @@
 
 package net.barashev.dbi2022
 
-import java.lang.IllegalArgumentException
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.function.Consumer
@@ -221,7 +220,7 @@ private class HardDiskEmulatorStorage: Storage {
         // 5400 rotations per minute = 90 rotations per second = 1 rotation per 0.0111 seconds
         // 1 page is 8 sectors and there are 64 sectors per track => there are 8 pages per track
         // => we need 1/8 rotation = 1.3ms to read the whole page
-        accessCostMs = 1.3 * numPages
+        accessCostMs += 1.3 * numPages
     }
 }
 
