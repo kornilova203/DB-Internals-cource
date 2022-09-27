@@ -16,7 +16,7 @@
 
 package net.barashev.dbi2022
 
-internal data class StatsImpl(var cacheHitCount: Int = 0, var cacheMissCount: Int = 0): PageCacheStats {
+internal data class StatsImpl(var cacheHitCount: Int = 0, var cacheMissCount: Int = 0) : PageCacheStats {
     override val cacheHit: Int
         get() = cacheHitCount
     override val cacheMiss: Int
@@ -185,4 +185,34 @@ class SubcacheImpl(private val mainCache: SimplePageCacheImpl, private val maxCa
 
     private fun evictCandidate(): CachedPageImpl =
         mainCache.cache[subcachePages.first()]!!
+}
+
+class ClockSweepPageCacheImpl(storage: Storage, maxCacheSize: Int = -1) : SimplePageCacheImpl(storage, maxCacheSize) {
+    private var pageIdx = 0
+    private val wasRecentlyAccessed = mutableMapOf<PageId, Boolean>()
+
+    override fun getEvictCandidate(): CachedPageImpl {
+        if (cacheArray.all { page -> page.pinCount != 0 }) {
+            throw IllegalStateException("All pages are pinned, there is no victim for eviction")
+        }
+        pageIdx = rotate()
+            .filter { i -> cacheArray[i].pinCount == 0 }
+            .first { i ->
+                if (wasRecentlyAccessed[cacheArray[i].id]!!) {
+                    wasRecentlyAccessed[cacheArray[i].id] = false
+                    false
+                } else true
+            }
+
+        return cacheArray[pageIdx]
+    }
+
+    override fun onPageRequest(page: CachedPageImpl, isCacheHit: Boolean?) {
+        super.onPageRequest(page, isCacheHit)
+        wasRecentlyAccessed[page.id] = true
+    }
+
+    private fun rotate(): Sequence<Int> {
+        return generateSequence { (pageIdx until cache.size).asSequence().plus(0 until pageIdx) }.flatten()
+    }
 }
